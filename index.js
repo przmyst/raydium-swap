@@ -169,6 +169,48 @@ async function swap() {
 
 }
 
+async function apeIn() {
+	const connection = new Connection(process.env.RPC_ENDPOINT, {
+		commitment: 'confirmed'
+	})
+
+	const wallet = new Wallet(Keypair.fromSecretKey(Uint8Array.from(bs58.decode(process.env.PRIVATE_KEY))))
+
+	const liquidityJsonResp = await axios('https://api.raydium.io/v2/sdk/liquidity/mainnet.json')
+
+	const liquidityJson = (liquidityJsonResp.data)
+
+	const allPoolKeysJson =  [...(liquidityJson.official ?? []), ...(liquidityJson.unOfficial ?? [])]
+
+	const poolInfo =  jsonInfo2PoolKeys(allPoolKeysJson.find(
+		(i) => (
+			i.baseMint === 'So11111111111111111111111111111111111111112' &&
+				i.quoteMint === process.argv[3]) ||
+			(
+				i.baseMint === process.argv[3] &&
+				i.quoteMint === 'So11111111111111111111111111111111111111112'
+			)
+	))
+
+	const tx = await getSwapTransaction(
+		process.argv[3],
+		process.env.APE_IN_AMOUNT,
+		poolInfo,
+		1500000,
+		'in',
+		connection,
+		wallet
+	)
+
+	const txid = await connection.sendTransaction(tx, [wallet.payer], {
+		skipPreflight: true,
+		maxRetries: 20
+	})
+
+	console.log(`https://solscan.io/tx/${txid}`)
+
+}
+
 async function sellAll() {
 	const connection = new Connection(process.env.RPC_ENDPOINT, 'confirmed')
 	const wallet = new Wallet(Keypair.fromSecretKey(Uint8Array.from(bs58.decode(process.env.PRIVATE_KEY))))
@@ -227,6 +269,8 @@ async function sellAll() {
 
 if(process.argv[2] === 'sell-all') {
 	sellAll()
+} else if (process.argv[2] === 'ape-in') {
+	apeIn()
 }else{
 	swap()
 }
