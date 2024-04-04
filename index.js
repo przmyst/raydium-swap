@@ -127,7 +127,7 @@ async function getSwapTransaction(
 	return legacyTransaction
 }
 
-const swap = async () => {
+async function swap() {
 	const connection = new Connection(process.env.RPC_ENDPOINT, {
 		commitment: 'confirmed' 
 	})
@@ -169,4 +169,65 @@ const swap = async () => {
 
 }
 
-swap()
+async function sellAll() {
+	const connection = new Connection(process.env.RPC_ENDPOINT, 'confirmed')
+	const wallet = new Wallet(Keypair.fromSecretKey(Uint8Array.from(bs58.decode(process.env.PRIVATE_KEY))))
+	const specifiedTokenMint = process.argv[3]
+
+	const solMintAddress = 'So11111111111111111111111111111111111111112'
+
+	const walletTokenAccounts = await getOwnerTokenAccounts(connection, wallet)
+	const specifiedTokenAccount = walletTokenAccounts.find(account => account.accountInfo.mint.toBase58() === specifiedTokenMint)
+
+	if (!specifiedTokenAccount) {
+		console.error('Specified token account not found in wallet.')
+		return
+	}
+
+	const amountToSwap = specifiedTokenAccount.accountInfo.amount
+
+	const liquidityJsonResp = await axios('https://api.raydium.io/v2/sdk/liquidity/mainnet.json')
+	const liquidityJson = liquidityJsonResp.data
+	const allPoolKeysJson = [...(liquidityJson.official ?? []), ...(liquidityJson.unOfficial ?? [])]
+
+	const poolInfo = jsonInfo2PoolKeys(allPoolKeysJson.find(pool =>
+		(pool.baseMint === specifiedTokenMint && pool.quoteMint === solMintAddress) ||
+		(pool.quoteMint === specifiedTokenMint && pool.baseMint === solMintAddress)
+	))
+
+	if (!poolInfo) {
+		console.error('No liquidity pool found for specified token to SOL swap.')
+		return
+	}
+
+	const tokenDecimals = specifiedTokenMint === poolInfo.baseMint.toString() ? poolInfo.baseDecimals : poolInfo.quoteDecimals
+
+	const amountToSwapDecimal = amountToSwap / Math.pow(10, tokenDecimals)
+
+	const tx = await getSwapTransaction(
+		solMintAddress,
+		amountToSwapDecimal,
+		poolInfo,
+		1500000,
+		'out',
+		connection,
+		wallet
+	)
+
+	try {
+		const txid = await connection.sendTransaction(tx, [wallet.payer], {
+			skipPreflight: true,
+			maxRetries: 20
+		})
+		console.log(`https://solscan.io/tx/${txid}`)
+	} catch (error) {
+		console.error(`Failed to swap specified token: ${error}`)
+	}
+}
+
+if(process.argv[2] === 'sell-all') {
+	sellAll()
+}else{
+	swap()
+}
+
