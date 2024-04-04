@@ -7,3 +7,7 @@
 #
 ### Sell all of a token
 #### node index sell-all 2HoVyeK6jGJ2oDhTNYH3GkY5JjhdBAXcJmeVssQotT7c
+#
+### Ape in on token
+#### Set amount of SOL to spend in .env APE_IN_AMOUNT
+#### node index ape-in 2HoVyeK6jGJ2oDhTNYH3GkY5JjhdBAXcJmeVssQotT7c
